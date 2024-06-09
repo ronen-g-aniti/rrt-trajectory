@@ -1,0 +1,11 @@
+﻿  rrt.cpp
+C:\Users\Ronen\source\repos\RRT\RRT\rrt.cpp(17,22): error C2039: 'isInsideEnvironment': is not a member of 'ObstacleParser'
+  C:\Users\Ronen\source\repos\RRT\RRT\obstacles.h(24,7):
+  see declaration of 'ObstacleParser'
+  
+C:\Users\Ronen\source\repos\RRT\RRT\rrt.cpp(17,68): error C2039: 'isInsideEnvironment': is not a member of 'ObstacleParser'
+  C:\Users\Ronen\source\repos\RRT\RRT\obstacles.h(24,7):
+  see declaration of 'ObstacleParser'
+  
+C:\Users\Ronen\source\repos\RRT\RRT\rrt.cpp(61,26): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\Ronen\source\repos\RRT\RRT\rrt.cpp(67,22): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
