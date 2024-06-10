@@ -51,7 +51,7 @@ This formula allowed me to smoothly rotate the quadcopter's orientation towards 
 
 ### Installation Instructions
 
-1. **nanoflann**: Download from the [nanoflann GitHub repository](https://github.com/jlblancoc/nanoflann) and follow the installation instructions.
+- **nanoflann**: Download from the [nanoflann GitHub repository](https://github.com/jlblancoc/nanoflann) and follow the installation instructions.
 
 ### Python Dependencies (for Visualization)
 
