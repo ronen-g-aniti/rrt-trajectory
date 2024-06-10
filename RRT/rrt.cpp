@@ -1,185 +1,217 @@
 #include "rrt.h"
-#include <random>
+#include <cmath>
 #include <iostream>
+#include <random>
+#include <algorithm>
+#include <numeric>
 
-using namespace std;
-using namespace Eigen;
-using namespace nanoflann;
+// Constructor
+RRT::RRT(ObstacleParser& environment, std::vector<double> startPos, std::vector<double> goalPos,
+	double goalBias, double maxSteeringAngleRate, double timeStep, double timeInterval,
+	double speed, int maxIterations, double goalTolerance) :
+	environment(environment), startPos(startPos), goalPos(goalPos), goalBias(goalBias),
+	maxSteerAngle(maxSteeringAngleRate* timeStep), timeStep(timeStep), speed(speed),
+	maxIterations(maxIterations), goalTolerance(goalTolerance), timeInterval(timeInterval),
+	integrationSteps(static_cast<int>(timeInterval / timeStep)), goalIsFound(false) {
 
-RRT::RRT(ObstacleParser& environment, Vector3d startPos, Vector3d goalPos, double goalBias, double maxSteerAngleRate,
-    double timeStep, double timeInterval, double speed, int maxIterations, double goalTolerance)
-    : environment(environment), startPos(startPos), goalPos(goalPos), goalBias(goalBias),
-    maxSteerAngle(maxSteerAngleRate* timeStep), timeStep(timeStep), speed(speed),
-    maxIterations(maxIterations), goalTolerance(goalTolerance), timeInterval(timeInterval),
-    integrationSteps(static_cast<int>(timeInterval / timeStep)), goalIsFound(false) {
+	// Calculate initial attitude vector from start position to goal position
+	std::vector<double> initialAttitude(3);
+	for (int i = 0; i < 3; ++i) {
+		initialAttitude[i] = goalPos[i] - startPos[i];
+	}
+	double norm = std::sqrt(std::inner_product(initialAttitude.begin(), initialAttitude.end(), initialAttitude.begin(), 0.0));
+	std::transform(initialAttitude.begin(), initialAttitude.end(), initialAttitude.begin(), [norm](double val) { return val / norm; });
 
-    // The drone's attitude will be pointing towards the goal position, initially
-    Vector3d delta = goalPos - startPos;
-    Vector3d startOrientation = delta.normalized();
-
-    // Define the starting state (position + orientation + time)
-    VectorXd startState(7); // x, y, z, vx, vy, vz, t
-    startState << startPos, startOrientation, 0.0; // 0.0 is the initial time
-
-    // Add the starting state to the list of states
-    states.push_back(startState);
-    edges[0] = -1; // The starting state has no parent
-
-    // Initialize the KD-Tree
-    cloud.points.push_back({ startState[0], startState[1], startState[2] });
-    kdTree = new myKDTree(3, cloud, nanoflann::KDTreeSingleIndexAdaptorParams(10));
-    kdTree->buildIndex();
-
+	// Initial state: position = startPos, attitude = initialAttitude, time = 0
+	std::vector<double> startState = { startPos[0], startPos[1], startPos[2], initialAttitude[0], initialAttitude[1], initialAttitude[2], 0.0 };
+	states.push_back(startState);
+	edges[0] = -1;
+	cloud.points.push_back({ startState[0], startState[1], startState[2] });
+	kdTree = new myKDTree(3, cloud, nanoflann::KDTreeSingleIndexAdaptorParams(10));
+	kdTree->buildIndex();
 }
 
-vector<VectorXd> RRT::run() {
+// Sample a point in the environment
+std::vector<double> RRT::sampleWithBias() {
+	static std::random_device rd;
+	static std::mt19937 gen(rd());
+	static std::uniform_real_distribution<> dis(0.0, 1.0);
+	static std::uniform_real_distribution<> disX(environment.getBounds()[0], environment.getBounds()[1]);
+	static std::uniform_real_distribution<> disY(environment.getBounds()[2], environment.getBounds()[3]);
+	static std::uniform_real_distribution<> disZ(environment.getBounds()[4], environment.getBounds()[5]);
 
-    for (int i = 0; i < maxIterations; i++) {
-        
-        Vector3d samplePoint = sampleWithBias();
-        int nearestIndex = findNearestState(samplePoint);
-        VectorXd nearestState = states[nearestIndex];
-        VectorXd newState = integrateForward(nearestState, samplePoint);
-
-        if (goalIsFound) {
-        
-            states.push_back(newState);
-            int newIndex = states.size() - 1;
-            edges[newIndex] = nearestIndex;
-            return constructPath(newIndex);
-        } 
-
-        states.push_back(newState);
-        int newIndex = states.size() - 1;
-        edges[newIndex] = nearestIndex;
-
-        // Add the new state to the KD-Tree
-        cloud.points.push_back({ newState[0], newState[1], newState[2] });
-        kdTree->buildIndex();
-    } 
-    cerr << "Path not found!" << endl;
-    return {};
-
-}
-
-Vector3d RRT::sampleWithBias() { 
-    
-    // Random number generators
-    // Static variables are used to avoid reseeding the random number generator
-    static random_device rd;
-    static mt19937 gen(rd());
-    static uniform_real_distribution<> dis(0.0, 1.0);
-    static uniform_real_distribution<> disX(environment.getBounds()[0], environment.getBounds()[1]);
-    static uniform_real_distribution<> disY(environment.getBounds()[2], environment.getBounds()[3]);
-    static uniform_real_distribution<> disZ(environment.getBounds()[4], environment.getBounds()[5]);
-
-    // With probability goalBias, return the goal position
-    if (dis(gen) < goalBias) { 
+	if (dis(gen) < goalBias) {
 		return goalPos;
-    }
-    else {
-		return Vector3d(disX(gen), disY(gen), disZ(gen));
+	}
+	else {
+		return { disX(gen), disY(gen), disZ(gen) };
 	}
 }
 
-int RRT::findNearestState(const Vector3d& queryPos) {
+// Find the nearest state to the query point
+int RRT::findNearestState(const std::vector<double>& queryPos) {
+	const double queryPoint[3] = { queryPos[0], queryPos[1], queryPos[2] };
+	size_t retIndex;
+	double outDistSqr;
+	nanoflann::KNNResultSet<double> resultSet(1);
+	resultSet.init(&retIndex, &outDistSqr);
+	kdTree->findNeighbors(resultSet, &queryPoint[0], nanoflann::SearchParameters());
+	
+	return static_cast<int>(retIndex);
 
-    const double queryPoint[3] = { queryPos[0], queryPos[1], queryPos[2] };
-    size_t retIndex; // Index of the nearest neighbor
-    double outDistSqr; // Squared distance to the nearest neighbor
-    nanoflann::KNNResultSet<double> resultSet(1); // K=1, meaning we only want the nearest neighbor
-    resultSet.init(&retIndex, &outDistSqr);
-    kdTree->findNeighbors(resultSet, &queryPoint[0], nanoflann::SearchParameters());
-    return static_cast<int>(retIndex);
+	
 }
 
-VectorXd RRT::integrateForward(const VectorXd& nearestState, const Vector3d& samplePoint) { 
+// Integrate the state forward in time
+std::vector<double> RRT::integrateForward(const std::vector<double>& nearestState, const std::vector<double>& samplePoint) {
+	std::cout << "Integrating forward from " << nearestState[0] << ", " << nearestState[1] << ", " << nearestState[2] << "\n";
+	std::vector<double> currentState = nearestState;
+	for (int i = 0; i < integrationSteps; i++) {
+		std::vector<double> priorState = currentState;
+		currentState = updateState(currentState, samplePoint);
 
-
-    VectorXd currentState = nearestState; 
-    for (int i = 0; i < integrationSteps; i++) { 
-    
-        VectorXd priorState = currentState; 
-        currentState = updateState(currentState, samplePoint); 
-
-        //Debugging
-        cout << "Current state: " << currentState.head<6>().transpose() << endl;
-
-        if ((goalPos - currentState.head<3>()).norm() < goalTolerance) {
+		if (std::sqrt(std::pow(goalPos[0] - currentState[0], 2) +
+			std::pow(goalPos[1] - currentState[1], 2) +
+			std::pow(goalPos[2] - currentState[2], 2)) < goalTolerance) {
 			goalIsFound = true;
-            cout << "Goal found!" << endl;
-			return currentState; 
+			std::cout << "Goal found!" << std::endl;
+			return currentState;
 		}
-        if (isCollision(currentState.head<3>()) || !isInsideEnvironment(currentState.head<3>())) {
+		if (isCollision({ currentState[0], currentState[1], currentState[2] }) ||
+			!isInsideEnvironment({ currentState[0], currentState[1], currentState[2] })) {
+
 			return priorState;
 		}
-    }
-    return currentState;
-} 
-
-VectorXd RRT::updateState(const VectorXd& nearestState, const Vector3d& samplePoint) { 
-
-    Vector3d priorAttitude = nearestState.segment<3>(3);
-    Vector3d priorPosition = nearestState.head<3>();
-    double priorTime = nearestState[6];
-    Vector3d u1 = (samplePoint - priorPosition).normalized(); // Points from the current position to the sample point
-    Vector3d axisVector = priorAttitude.cross(u1); // Cross the prior attitude with the direction to the sample point to get the axis of rotation
-    
-    Matrix3d rotationMatrix;
-
-    if (axisVector.norm() <= 0.01) {
-        rotationMatrix = Matrix3d::Identity(); // Prevents a zero axis vector from causing a NaN rotation
-    }
-    else {
-        Vector3d u2 = axisVector.normalized(); // Normalized axis of rotation
-        double theta = acos(priorAttitude.dot(u1)); // Angle between prior attitude and direction to sample point serves as the angle of rotation
-        double steerAngle = std::clamp(theta, -maxSteerAngle, maxSteerAngle); // Clamp the steering angle to prevent large angular changes (we want flyable paths)
-        Matrix3d K;
-        K << 0, -u2.z(), u2.y(),
-			u2.z(), 0, -u2.x(),
-			-u2.y(), u2.x(), 0; // Skew-symmetric matrix for the cross product with the axis of rotation
-		rotationMatrix = Matrix3d::Identity() + sin(steerAngle) * K + (1 - cos(steerAngle)) * K * K; // Rodrigues' rotation formula
-
-        Vector3d newAttitude = rotationMatrix * priorAttitude; // Rotate the prior attitude to get the new attitude
-        Vector3d newPosition = priorPosition + speed * timeStep * newAttitude; // Move the drone in the direction of the new attitude
-        double newTime = priorTime + timeStep; // Increment the time
-        VectorXd newState(7); // x, y, z, vx, vy, vz, t
-        newState << newPosition, newAttitude, newTime;
-        return newState;
-    }
+	}
+	return currentState;
 }
 
-bool RRT::isCollision(const Vector3d& point) {
-    for (const auto& obstacle : environment.getObstacles()) {
-        if (obstacle.isCollision(point.cast<float>())) {
-            return true;
-        }
-    }
-    return false;
+// Update the state of the drone
+std::vector<double> RRT::updateState(const std::vector<double>& nearestState, const std::vector<double>& samplePoint) {
+	std::vector<double> priorAttitude(nearestState.begin() + 3, nearestState.begin() + 6);
+	std::vector<double> priorPosition(nearestState.begin(), nearestState.begin() + 3);
+	double priorTime = nearestState[6];
+
+	std::vector<double> u1(3);
+	for (int i = 0; i < 3; ++i) {
+		u1[i] = samplePoint[i] - priorPosition[i];
+	}
+	double u1_norm = std::sqrt(std::inner_product(u1.begin(), u1.end(), u1.begin(), 0.0));
+	std::transform(u1.begin(), u1.end(), u1.begin(), [u1_norm](double val) { return val / u1_norm; });
+
+	std::vector<double> axisVector(3);
+	axisVector[0] = priorAttitude[1] * u1[2] - priorAttitude[2] * u1[1];
+	axisVector[1] = priorAttitude[2] * u1[0] - priorAttitude[0] * u1[2];
+	axisVector[2] = priorAttitude[0] * u1[1] - priorAttitude[1] * u1[0];
+
+	double axisVector_norm = std::sqrt(std::inner_product(axisVector.begin(), axisVector.end(), axisVector.begin(), 0.0));
+	if (axisVector_norm <= 0.01) {
+		axisVector = { 0.0, 0.0, 0.0 };
+	}
+	else {
+		std::transform(axisVector.begin(), axisVector.end(), axisVector.begin(), [axisVector_norm](double val) { return val / axisVector_norm; });
+	}
+
+	double theta = std::acos(std::inner_product(priorAttitude.begin(), priorAttitude.end(), u1.begin(), 0.0));
+	double steerAngle = std::clamp(theta, -maxSteerAngle, maxSteerAngle);
+
+	std::vector<std::vector<double>> K = {
+		{0, -axisVector[2], axisVector[1]},
+		{axisVector[2], 0, -axisVector[0]},
+		{-axisVector[1], axisVector[0], 0}
+	};
+
+	std::vector<std::vector<double>> rotationMatrix = {
+		{1, 0, 0},
+		{0, 1, 0},
+		{0, 0, 1}
+	};
+
+	if (axisVector_norm > 0.01) {
+		double sinTheta = std::sin(steerAngle);
+		double cosTheta = std::cos(steerAngle);
+		for (int i = 0; i < 3; ++i) {
+			for (int j = 0; j < 3; ++j) {
+				rotationMatrix[i][j] += sinTheta * K[i][j];
+				for (int k = 0; k < 3; ++k) {
+					rotationMatrix[i][j] += (1 - cosTheta) * K[i][k] * K[k][j];
+				}
+			}
+		}
+	}
+
+	std::vector<double> newAttitude(3);
+	for (int i = 0; i < 3; ++i) {
+		newAttitude[i] = 0;
+		for (int j = 0; j < 3; ++j) {
+			newAttitude[i] += rotationMatrix[i][j] * priorAttitude[j];
+		}
+	}
+
+	std::vector<double> newPosition(3);
+	for (int i = 0; i < 3; ++i) {
+		newPosition[i] = priorPosition[i] + speed * timeStep * newAttitude[i];
+	}
+
+	double newTime = priorTime + timeStep;
+	std::vector<double> newState = { newPosition[0], newPosition[1], newPosition[2], newAttitude[0], newAttitude[1], newAttitude[2], newTime };
+	return newState;
 }
 
-bool RRT::isInsideEnvironment(const Vector3d& point) {
-    const auto& bounds = environment.getBounds();
-    return (point.x() >= bounds[0] && point.x() <= bounds[1] &&
-        		point.y() >= bounds[2] && point.y() <= bounds[3] &&
-        		point.z() >= bounds[4] && point.z() <= bounds[5]);
+std::vector<std::vector<double>> RRT::run() {
+	for (int i = 0; i < maxIterations; i++) {
+		std::vector<double> samplePoint = sampleWithBias();
+		int nearestIndex = findNearestState(samplePoint);
+		std::vector<double> nearestState = states[nearestIndex];
+
+		std::vector<double> newState = integrateForward(nearestState, samplePoint);
+		if (goalIsFound) {
+			states.push_back(newState);
+			int newIndex = states.size() - 1;
+			edges[newIndex] = nearestIndex;
+			return constructPath(newIndex);
+		}
+
+		states.push_back(newState);
+		int newIndex = states.size() - 1;
+		edges[newIndex] = nearestIndex;
+
+		cloud.points.push_back({ newState[0], newState[1], newState[2] });
+		kdTree->buildIndex();
+	}
+	std::cerr << "Path not found!" << std::endl;
+	return {};
 }
 
-vector<VectorXd> RRT::constructPath(int newIndex) {
-    vector<int> path;
-    path.push_back(newIndex);
-    int parent = edges[newIndex];
-    while (parent != -1) {
-        path.push_back(parent);
-        parent = edges[parent];
+std::vector<std::vector<double>> RRT::constructPath(int newIndex) {
+	std::vector<int> path;
+	path.push_back(newIndex);
+	int parent = edges[newIndex];
+	while (parent != -1) {
+		path.push_back(parent);
+		parent = edges[parent];
+	}
+	std::reverse(path.begin(), path.end());
 
-    }
-    reverse(path.begin(), path.end());
+	std::vector<std::vector<double>> pathAsStates;
+	for (int idx : path) {
+		pathAsStates.push_back(states[idx]);
+	}
+	return pathAsStates;
+}
 
-    vector<VectorXd> pathAsStates;
-    for (int idx : path) {
-        pathAsStates.push_back(states[idx]);
+bool RRT::isCollision(const std::vector<double>& point) {
+	for (const auto& obstacle : environment.getObstacles()) {
+		if (obstacle.isCollision(point)) {
+			return true;
+		}
+	}
+	return false;
+}
 
-    }
-    return pathAsStates;
+bool RRT::isInsideEnvironment(const std::vector<double>& point) {
+	const auto& bounds = environment.getBounds();
+	return (point[0] >= bounds[0] && point[0] <= bounds[1] &&
+		point[1] >= bounds[2] && point[1] <= bounds[3] &&
+		point[2] >= bounds[4] && point[2] <= bounds[5]);
 }

@@ -7,10 +7,9 @@ In this project, I tackled the complex challenge of developing a 3D trajectory p
 Through this project, I demonstrated my engineering mindset and problem-solving abilities by breaking down the problem into manageable components, rigorously testing each part, and integrating them into a cohesive system. The result is a sophisticated trajectory planner capable of generating realistic and feasible flight paths for a quadcopter, showcasing my ability to handle complex technical challenges and think like an engineer.
 
 
-The following images typify the results of the project:
+The following image typifies the results of the project:
 
-- Results1
-- Results2
+![RRT](RRT/rrt.png)
 
 ## Theory
 

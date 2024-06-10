@@ -2,13 +2,12 @@
 
 #include <vector>
 #include <string>
-#include <Eigen/Dense>
 
 class Obstacle {
 public:
-    Obstacle(float posX, float posY, float posZ, float halfsizeX, float halfsizeY, float halfsizeZ);
+    Obstacle(float posX, float posY, float posZ, float halfSizeX, float halfSizeY, float halfSizeZ);
 
-    float isCollision(const Eigen::Vector3f& point) const;
+    bool isCollision(const std::vector<double>& point) const;
     float getMinX() const;
     float getMaxX() const;
     float getMinY() const;

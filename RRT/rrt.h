@@ -2,7 +2,6 @@
 
 #include <vector>
 #include <map>
-#include <Eigen/Dense>
 #include <nanoflann.hpp>
 #include "obstacles.h"
 #include <cmath>
@@ -29,21 +28,22 @@ typedef nanoflann::KDTreeSingleIndexAdaptor<
 	nanoflann::L2_Simple_Adaptor<double, PointCloud>,
 	PointCloud,
 	3
-	> myKDTree;
+> myKDTree;
 
 class RRT {
 
 public:
-	RRT(ObstacleParser& environment, Eigen::Vector3d startPos, Eigen::Vector3d goalPos,
-		double goalBias = 0.5, double maxSteeringAngleRate = M_PI / 24, double timeStep = 0.1,
-		double timeInterval = 5.0, double speed = 2.0, int maxIterations = 10000, double goalTolerance = 1.0);
+	RRT(ObstacleParser& environment, std::vector<double> startPos, std::vector<double> goalPos,
+		double goalBias = 0.20, double maxSteeringAngleRate = M_PI / 24, double timeStep = 0.1,
+		double timeInterval = 2.0, double speed = 2.0, int maxIterations = 10000, double goalTolerance = 1.0);
 
-	std::vector<Eigen::VectorXd> run(); 
+	std::vector<std::vector<double>> run();
+	std::vector<std::vector<double>> getStates() const { return states; }
 
-private: 
+private:
 	ObstacleParser& environment;
-	Eigen::Vector3d startPos;
-	Eigen::Vector3d goalPos;
+	std::vector<double> startPos;
+	std::vector<double> goalPos;
 	double goalBias;
 	double maxSteerAngle;
 	double timeStep;
@@ -53,17 +53,16 @@ private:
 	double timeInterval;
 	int integrationSteps;
 	bool goalIsFound;
-	bool steering;
-	std::vector<Eigen::VectorXd> states;
+	std::vector<std::vector<double>> states;
 	std::map<int, int> edges;
 	PointCloud cloud;
 	myKDTree* kdTree;
 
-	Eigen::Vector3d sampleWithBias();
-	int findNearestState(const Eigen::Vector3d& queryPos);
-	Eigen::VectorXd integrateForward(const Eigen::VectorXd& nearestState, const Eigen::Vector3d& samplePoint);
-	Eigen::VectorXd updateState(const Eigen::VectorXd& nearestState, const Eigen::Vector3d& samplePoint);
-	bool isCollision(const Eigen::Vector3d& point);
-	bool isInsideEnvironment(const Eigen::Vector3d& point);
-	std::vector<Eigen::VectorXd> constructPath(int newIndex);
+	std::vector<double> sampleWithBias();
+	int findNearestState(const std::vector<double>& queryPos);
+	std::vector<double> integrateForward(const std::vector<double>& nearestState, const std::vector<double>& samplePoint);
+	std::vector<double> updateState(const std::vector<double>& nearestState, const std::vector<double>& samplePoint);
+	bool isCollision(const std::vector<double>& point);
+	bool isInsideEnvironment(const std::vector<double>& point);
+	std::vector<std::vector<double>> constructPath(int newIndex);
 };
