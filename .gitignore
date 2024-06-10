@@ -1,0 +1,23 @@
+# Visual Studio files
+.vs/
+*.vcxproj.user
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build directories
+x64/
+Debug/
+Release/
+*.obj
+*.log
+*.tlog
+*.ilk
+*.idb
+*.pdb
+*.ipch
+*.aps
+*.ncb
+*.sdf
+*.opensdf
