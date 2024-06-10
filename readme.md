@@ -47,23 +47,21 @@ This formula allowed me to smoothly rotate the quadcopter's orientation towards 
 
 ### C++ Dependencies
 
-- **Eigen**: A C++ template library for linear algebra, used for matrix and vector operations.
 - **nanoflann**: A C++ header-only library for KD-trees, used for efficient nearest-neighbor searches in the RRT algorithm.
 
 ### Installation Instructions
 
-1. **Eigen**: Download from the [official Eigen website](https://eigen.tuxfamily.org/) and follow the installation instructions.
-2. **nanoflann**: Download from the [nanoflann GitHub repository](https://github.com/jlblancoc/nanoflann) and follow the installation instructions.
+1. **nanoflann**: Download from the [nanoflann GitHub repository](https://github.com/jlblancoc/nanoflann) and follow the installation instructions.
 
 ### Python Dependencies (for Visualization)
 
 - **Matplotlib**: A plotting library for creating visualizations.
-- **Pandas**: A data manipulation and analysis library.
+- **Numpy**: A library for numerical computations.
 
 To install these Python libraries, use pip:
 
 ```sh
-pip install matplotlib pandas
+pip install matplotlib numpy
 ```
 
 ## Usage
@@ -72,7 +70,6 @@ pip install matplotlib pandas
 2. **Run the Main Program**: Execute `main.cpp` to parse obstacles, find a path using RRT, and generate a trajectory.
 3. **Visualize the Results**: Use the provided Python scripts to visualize the obstacles and trajectory.
 
-   - `show_obstacles.py`
    - `show_trajectory.py`
 
 Each run of the main program will generate CSV files that are used by the visualization scripts. Ensure that these scripts are executed after running the main program to see the latest results.
