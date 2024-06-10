@@ -45,10 +45,10 @@ This formula allowed me to smoothly rotate the quadcopter's orientation towards 
 
 ### Euler Integration
 
-With the new orientation vector $\mathbf{v}_{\text{new}}$, I used Euler integration to establish a new state for the search tree . Euler integration is a simple and efficient numerical method used to solve ordinary differential equations. In this context, it advances the state by a small time step $dt$, ensuring smooth transitions and realistic movements.
+With the new orientation vector $\mathbf{v}_{\text{new}}$, I used Euler integration to establish a new state for the search tree of the RRT. Euler integration is a simple and efficient numerical method used to solve ordinary differential equations. In this context, it advances the state by a small time step $dt$, ensuring smooth transitions and realistic movements.
 
 **Update Position**: Given the current position $\mathbf{p}$ and the orientation vector $\mathbf{v}_{\text{new}}$, the new position $\mathbf{p}_{\text{new}}$ is calculated as:
-  
+
 $$
 \mathbf{p}_{\text{new}} = \mathbf{p} + \mathbf{v}_{\text{new}} \cdot \text{speed} \cdot dt
 $$
