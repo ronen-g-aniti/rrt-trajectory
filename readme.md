@@ -49,7 +49,7 @@ With the new orientation vector $\mathbf{v}_{\text{new}}$, I used Euler integrat
 
 **Update Position**: Given the current position $\mathbf{p}$ and the orientation vector $`\mathbf{v}_{\text{new}}`$, the new position $`\mathbf{p}_{\text{new}}`$ is calculated as: 
 
-$`\mathbf{p}_{\text{new}} = \mathbf{p} + \mathbf{v}_{\text{new}} \cdot \text{speed} \cdot dt`$
+<center>$`\mathbf{p}_{\text{new}} = \mathbf{p} + \mathbf{v}_{\text{new}} \cdot \text{speed} \cdot dt`$</center>
 
 By combining Rodrigues' rotation formula and Euler integration, the RRT algorithm expands the search tree smoothly and realistically. This method ensures effective navigation through the 3D space while avoiding obstacles, resulting in a more efficient and feasible trajectory planning system for the quadcopter.
 
